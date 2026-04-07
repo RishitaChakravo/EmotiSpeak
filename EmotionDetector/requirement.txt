@@ -1,0 +1,16 @@
+torch
+matplotlib
+numpy
+ultralytics
+cvzone
+hydra-core
+opencv-python
+Pillow
+PyYAML
+requests
+scipy
+torchvision
+tqdm
+filterpy
+scikit-image
+lap
