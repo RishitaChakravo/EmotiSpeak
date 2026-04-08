@@ -83,7 +83,7 @@ def analyze_speech(text: str, duration_seconds: float) -> dict:
         "filler_ratio": filler_ratio,
     }
  
-class RecordingSession:
+class RecordingSession():
     def __init__(self):
         self._start_time = None
         self._audio_chunks = []

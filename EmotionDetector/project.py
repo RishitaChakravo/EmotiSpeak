@@ -2,6 +2,9 @@ from fastapi import FastAPI
 import uvicorn
 from test import RecordingSession, transcribe_audio, analyze_speech
 from fastapi.middleware.cors import CORSMiddleware
+from model import model
+import torch
+from main import VideoSession, analyze_emotions
 
 app = FastAPI()
 
@@ -13,19 +16,31 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+model.to(device)
+model.eval()
+
 session = RecordingSession()
+vidSession = VideoSession(model=model)
 
 @app.post('/api/audioops/start')
 def start():
     session.start()
-    return {"status": "recording"}
+    vidSession.start()
+    return {"status": "Audio and Video Recording"}
 
 @app.post('/api/audioops/stop')
 def stop():
     try:
         audio, duration = session.stop()
         text = transcribe_audio(audio)
-        return analyze_speech(text, duration)
+        emotion_log = vidSession.stop()
+        vid_data = analyze_emotions(emotion_log)
+        aud_data = analyze_speech(text, duration)
+        return {
+            "audio" : aud_data,
+            "video" : vid_data
+        }
     except Exception as e:
         print("ERROR:", e)
         return {"error": str(e)}
