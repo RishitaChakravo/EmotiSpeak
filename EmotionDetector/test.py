@@ -16,7 +16,7 @@ FILLERS = [
     "so", "well", "okay", "right",
 ]
 
-model = whisper.load_model("base")
+model = whisper.load_model("small") 
 
 def record_audio(duration: float) -> np.ndarray:
     audio = sd.rec(
@@ -38,9 +38,25 @@ def transcribe_audio(audio: np.ndarray) -> str:
  
         if audio.max() > 1.0 or audio.min() < -1.0:
             audio = audio / np.max(np.abs(audio))
+
+        if np.max(np.abs(audio)) < 0.01:
+            print("[WARNING] Audio amplitude is very low — mic may not be capturing properly.")
+            return ""
         
         wav.write(tmp_path, SAMPLE_RATE, audio)
-        result = model.transcribe(tmp_path)
+
+        duration_check = len(audio) / SAMPLE_RATE
+        print(f"[DEBUG] Audio duration: {duration_check:.2f}s, Max amplitude: {np.max(np.abs(audio)):.3f}")
+
+        result = model.transcribe(
+            tmp_path,
+            language="en",
+            fp16=False,
+            initial_prompt="Transcribe exactly as spoken, include all filler words like um, uh, er, ah, like, you know exactly as spoken. Do not clean up or remove any words.",
+            condition_on_previous_text=False,
+            no_speech_threshold=0.3,
+            suppress_tokens=[]
+        )
         return result["text"].strip()
     finally:
         if os.path.exists(tmp_path):
@@ -60,11 +76,9 @@ def detect_filler(text: str) -> dict:
     }
 
 def calculate_wpm(text: str, duration_seconds: float) -> float:
-    """
-    Calculate words per minute.
-    `duration_seconds` is the actual recorded/elapsed time.
-    """
-    word_count = len(text.split())
+    words = text.split()
+    filtered_words = [word for word in words if word not in FILLERS]
+    word_count = len(filtered_words)
     if duration_seconds <= 0 or word_count == 0:
         return 0.0
     return round((word_count / duration_seconds) * 60, 1)
@@ -94,6 +108,8 @@ class RecordingSession():
         self._audio_chunks = []
  
         def callback(indata, frames, time_info, status):
+            if status:
+                print(f"[STREAM STATUS] {status}")
             self._audio_chunks.append(indata.copy())
  
         self._stream = sd.InputStream(
@@ -112,4 +128,3 @@ class RecordingSession():
         duration = time.time() - self._start_time
         audio = np.concatenate(self._audio_chunks, axis=0) if self._audio_chunks else np.array([])
         return audio, duration
- 
