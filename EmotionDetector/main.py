@@ -11,7 +11,6 @@ class_names = [
     "Happy", "Sad", "Angry", "Neutral"
 ]
 
-
 POSITIVE_EMOTIONS = {'happy', 'surprise'}
 NEGATIVE_EMOTIONS = {'fear', 'disgust', 'anger', 'sad'}
 NEUTRAL_EMOTIONS = {'neutral'}
@@ -27,11 +26,11 @@ def analyze_emotions(emotion_log) -> dict:
     neutral = sum(counts.get(e, 0) for e in NEUTRAL_EMOTIONS)
 
     return {
-        "dominant_emotion" : counts.most_common(1),
-        "positive_ratio" : round(positive / total, 2),
-        "negative_ratio" : round(negative / total, 2),
-        "neutral_ratio" : round(neutral / total, 2),
-        "confidence_level" : interpret_confidence(positive, negative, total),
+        "dominant_emotion": counts.most_common(1),
+        "positive_ratio": round(positive / total, 2),
+        "negative_ratio": round(negative / total, 2),
+        "neutral_ratio": round(neutral / total, 2),
+        "confidence_level": interpret_confidence(positive, negative, total),
     }
 
 def interpret_confidence(positive, negative, total) -> str:
@@ -53,7 +52,8 @@ class VideoSession():
         self._thread = None
         self._emotion_log = []
         self._model = model
-
+        self._device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        self._model.to(self._device) 
         self.face_detector = cv2.FaceDetectorYN.create(
             "face_detection_yunet_2023mar.onnx",
             "",
@@ -61,29 +61,47 @@ class VideoSession():
         )
             
         self.transform = transforms.Compose([
-            transforms.Resize((224,224)),
+            transforms.Resize((224, 224)),
             transforms.ToTensor(),
             transforms.Normalize(
-                mean=[0.485,0.456,0.406],
-                std=[0.229,0.224,0.225]
+                mean=[0.485, 0.456, 0.406],
+                std=[0.229, 0.224, 0.225]
             )
         ])
 
     def start(self):
         self._running = True
         self._cap = cv2.VideoCapture(0)
+
+        if not self._cap.isOpened():
+            print("[ERROR] Camera index 0 failed, trying index 1...")
+            self._cap = cv2.VideoCapture(1)
+            if not self._cap.isOpened():
+                raise RuntimeError("Could not open any camera. Check if another app is using it.")
+
         self._cap.set(3, 640)
         self._cap.set(4, 480)
-        self._device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-        self._thread = threading.Thread(target= self._run)
 
+        self._thread = threading.Thread(target=self._run)
+        self._thread.daemon = True
+        self._thread.start()
+    def get_frame(self):
+        if self._cap is None or not self._cap.isOpened():
+            return None
+        success, img = self._cap.read()
+        if not success:
+            return None
+        _, buffer = cv2.imencode('.jpg', img)
+        return buffer.tobytes()
+    
     def _run(self):
         buffer = deque(maxlen=10)
-        print("Video thread started")
+        print("[VIDEO] Thread started")
+
         while self._running:
             success, img = self._cap.read()
             if not success:
-                print("Camera failed")
+                print("[ERROR] Camera read failed")
                 break
 
             img = cv2.resize(img, (640, 480))
@@ -93,7 +111,6 @@ class VideoSession():
             _, faces = self.face_detector.detect(img)
 
             if faces is not None:
-                print(f"Faces detected: {len(faces)}")
                 for face_data in faces:
                     x, y, fw, fh = map(int, face_data[:4])
 
@@ -105,44 +122,42 @@ class VideoSession():
 
                     face = img[y1:y2, x1:x2]
                     if face.size == 0 or face.shape[0] == 0 or face.shape[1] == 0:
-                        print(f"Faces detected: {len(faces)}")
                         continue
 
                     face_resized = cv2.resize(face, (224, 224))
                     face_rgb = cv2.cvtColor(face_resized, cv2.COLOR_BGR2RGB)
                     face_pil = Image.fromarray(face_rgb)
-                    face_tensor = self.transform(face_pil).unsqueeze(0).to(self.device)
+                    face_tensor = self.transform(face_pil).unsqueeze(0).to(self._device) 
 
-                    if face.shape != (1, 3, 224, 224):
-                        print("Bad tensor shape:", face_tensor.shape)  
+                    if face_tensor.shape != (1, 3, 224, 224):
+                        print("Bad tensor shape:", face_tensor.shape)
                         continue
 
                     with torch.no_grad():
-                        output = self._model(face)
+                        output = self._model(face_tensor)
 
                     probs = torch.softmax(output, dim=1)
                     confidence, pred = torch.max(probs, dim=1)
 
-                    emotion = class_names[pred]
+                    emotion = class_names[pred.item()]
                     self._emotion_log.append(emotion.lower())
-                    print(f"Emotion detected: {emotion}")
+                    print(f"[EMOTION] {emotion} ({confidence.item():.2f})")
 
                     cv2.rectangle(img, (x1, y1), (x2, y2), (0, 255, 0), 2)
                     cv2.putText(img, emotion, (x1, y1 - 10),
                                 cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
             else:
-                        print("No face detected in frame")
-            cv2.imshow("Face", img)
+                print("[VIDEO] No face detected in frame")
 
             if cv2.waitKey(1) & 0xFF == 27:
                 break
-        print(f"Thread ending. Emotions logged: {self.emotion_log}")
+
+        print(f"[VIDEO] Thread ending. Emotions logged: {self._emotion_log}")
     def stop(self):
         self._running = False
         if self._thread and self._thread.is_alive():
-            self._thread.join()
+            self._thread.join(timeout=2)
         if self._cap:
             self._cap.release()
         cv2.destroyAllWindows()
         return self._emotion_log
-
