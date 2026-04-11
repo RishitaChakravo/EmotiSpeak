@@ -9,7 +9,8 @@ type Results = {
     word_count? : number,
     wpm?: number,
     fillers?: [string],
-    fillers_ratio?: number
+    filler_ratio?: number,
+    filler_percentage?: number
   }
   video?: {
     dominant_emotion?: [string, number][];
@@ -39,6 +40,9 @@ export default function Home() {
     setResults(res.data);
     setStarted(false);
     setLoading(false);
+    console.log(res.data?.audio?.transcript);
+    console.log(res.data?.audio?.word_count);
+    console.log(res.data?.audio?.fillers?.total);
   }
 
   const vid = results?.video;
@@ -133,7 +137,7 @@ export default function Home() {
                 </div>
               </div>
 
-              {[{label: "Fillers Percentage", value: aud?.fillers_ratio ?? 0},
+              {[{label: "Fillers Percentage", value: aud?.filler_ratio ?? 0, color: "bg-red-600"},
                 { label: "Positive", value: vid?.positive_ratio ?? 0, color: "bg-emerald-500" },
                 { label: "Negative", value: vid?.negative_ratio ?? 0, color: "bg-red-500" },
                 { label: "Neutral",  value: vid?.neutral_ratio  ?? 0, color: "bg-zinc-500" },
