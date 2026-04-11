@@ -141,7 +141,6 @@ class VideoSession():
 
                     emotion = class_names[pred.item()]
                     self._emotion_log.append(emotion.lower())
-                    print(f"[EMOTION] {emotion} ({confidence.item():.2f})")
 
                     cv2.rectangle(img, (x1, y1), (x2, y2), (0, 255, 0), 2)
                     cv2.putText(img, emotion, (x1, y1 - 10),
@@ -152,7 +151,6 @@ class VideoSession():
             if cv2.waitKey(1) & 0xFF == 27:
                 break
 
-        print(f"[VIDEO] Thread ending. Emotions logged: {self._emotion_log}")
     def stop(self):
         self._running = False
         if self._thread and self._thread.is_alive():

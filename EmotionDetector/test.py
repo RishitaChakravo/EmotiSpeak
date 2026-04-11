@@ -52,7 +52,7 @@ def transcribe_audio(audio: np.ndarray) -> str:
             tmp_path,
             language="en",
             fp16=False,
-            initial_prompt="Transcribe exactly as spoken, include all filler words like um, uh, er, ah, like, you know exactly as spoken. Do not clean up or remove any words.",
+            initial_prompt="Give raw text. Transcribe exactly as spoken, include all filler words like um, uh, er, ah, like, you know exactly as spoken. Do not clean up or remove any words.",
             condition_on_previous_text=False,
             no_speech_threshold=0.3,
             suppress_tokens=[]
@@ -77,11 +77,13 @@ def detect_filler(text: str) -> dict:
 
 def calculate_wpm(text: str, duration_seconds: float) -> float:
     words = text.split()
-    filtered_words = [word for word in words if word not in FILLERS]
-    word_count = len(filtered_words)
-    if duration_seconds <= 0 or word_count == 0:
+    total_words = len(words)
+    filler_data = detect_filler(text)
+    non_filler_count = total_words - filler_data["total"]
+ 
+    if duration_seconds <= 0 or non_filler_count <= 0:
         return 0.0
-    return round((word_count / duration_seconds) * 60, 1)
+    return round((non_filler_count / duration_seconds) * 60, 1)
 
 def analyze_speech(text: str, duration_seconds: float) -> dict:
     words = text.split()
@@ -95,6 +97,7 @@ def analyze_speech(text: str, duration_seconds: float) -> dict:
         "wpm": calculate_wpm(text, duration_seconds),
         "fillers": filler_data,
         "filler_ratio": filler_ratio,
+        "filler_percentage": round(filler_ratio * 100, 1)
     }
  
 class RecordingSession():
