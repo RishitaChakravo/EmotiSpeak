@@ -10,7 +10,6 @@ class_names = [
     "Surprise", "Fear", "Disgust",
     "Happy", "Sad", "Angry", "Neutral"
 ]
-
 POSITIVE_EMOTIONS = {'happy', 'surprise'}
 NEGATIVE_EMOTIONS = {'fear', 'disgust', 'anger', 'sad'}
 NEUTRAL_EMOTIONS = {'neutral'}
@@ -148,14 +147,10 @@ class VideoSession():
             else:
                 print("[VIDEO] No face detected in frame")
 
-            if cv2.waitKey(1) & 0xFF == 27:
-                break
-
     def stop(self):
         self._running = False
         if self._thread and self._thread.is_alive():
             self._thread.join(timeout=2)
         if self._cap:
             self._cap.release()
-        cv2.destroyAllWindows()
         return self._emotion_log
