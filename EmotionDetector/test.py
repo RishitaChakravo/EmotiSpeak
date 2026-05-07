@@ -2,7 +2,6 @@ import whisper
 import sounddevice as sd
 import numpy as np
 import scipy.io.wavfile as wav
-import tempfile
 import re
 import time
 
