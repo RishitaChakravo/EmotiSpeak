@@ -11,7 +11,7 @@ FILLERS = [
     "so", "well", "okay", "right",
 ]
 
-model = whisper.load_model("small") 
+model = whisper.load_model("tiny") 
 
 
 def transcribe_audio(audio_path: str) -> str:
