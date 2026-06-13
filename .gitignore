@@ -2,6 +2,7 @@
 # model files
 .env
 *.pth
+!best_model.pth
 
 # dependencies
 /node_modules
