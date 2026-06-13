@@ -13,7 +13,7 @@ model.fc = nn.Sequential(
     nn.Dropout(0.4),
     nn.Linear(512, 7)
 )
-model.load_state_dict(torch.load("best_model.pth", map_location=device))
+model.load_state_dict(torch.load("best_model.pth", map_location=device, weights_only=False))
 model = model.to(device)
 
 model.eval()

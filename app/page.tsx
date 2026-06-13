@@ -21,6 +21,7 @@ type Video = {
 };
 
 export default function Home() {
+  const API = process.env.NEXT_PUBLIC_BACKEND_URL;
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
@@ -37,7 +38,7 @@ export default function Home() {
       setVideo(null);
       setAudio(null);
 
-      const res = await axios.post("http://localhost:8000/api/audioops/start")
+      const res = await axios.post(`${API}/api/audioops/start`)
 
       const stream = await navigator.mediaDevices.getUserMedia({
         video: true,
@@ -93,7 +94,7 @@ export default function Home() {
       formdata.append("file", blob, "frame.jpg");
 
       try {
-        const res = await axios.post("http://localhost:8000/api/video/frame", formdata);
+        const res = await axios.post(`${API}/api/video/frame`, formdata);
       } catch (err) {
         console.log(err);
       }
@@ -141,8 +142,8 @@ export default function Home() {
     formData.append("duration", duration.toString())
 
     try {
-      const res1 = await axios.post("http://localhost:8000/api/audioops/stop");
-      const res2 = await axios.post("http://localhost:8000/api/audio/upload", formData);
+      const res1 = await axios.post(`${API}/api/audioops/stop`);
+      const res2 = await axios.post(`${API}/api/audio/upload"`, formData);
       setAudio(res2.data);
       setVideo(res1.data.video);
     } catch (err) {
