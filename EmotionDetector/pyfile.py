@@ -5,13 +5,14 @@ from PIL import Image
 from collections import deque
 from collections import Counter
 import threading
-
+import numpy as np
 class_names = [
     "Surprise", "Fear", "Disgust",
     "Happy", "Sad", "Angry", "Neutral"
 ]
+
 POSITIVE_EMOTIONS = {'happy', 'surprise'}
-NEGATIVE_EMOTIONS = {'fear', 'disgust', 'anger', 'sad'}
+NEGATIVE_EMOTIONS = {'fear', 'disgust', 'angry', 'sad'}
 NEUTRAL_EMOTIONS = {'neutral'}
 
 def analyze_emotions(emotion_log) -> dict:
@@ -44,21 +45,25 @@ def interpret_confidence(positive, negative, total) -> str:
     else:
         return "Neutral and composed"
 
-class VideoSession():
+class VideoService:
     def __init__(self, model):
-        self._cap = None
-        self._running = False
-        self._thread = None
-        self._emotion_log = []
-        self._model = model
-        self._device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-        self._model.to(self._device) 
+        self.model = model
+
+        self.device = torch.device(
+            "cuda" if torch.cuda.is_available() else "cpu"
+        )
+
+        self.model.to(self.device)
+        self.model.eval()
+
+        self.emotion_log = []
+
         self.face_detector = cv2.FaceDetectorYN.create(
             "face_detection_yunet_2023mar.onnx",
             "",
             (320, 320)
         )
-            
+
         self.transform = transforms.Compose([
             transforms.Resize((224, 224)),
             transforms.ToTensor(),
@@ -68,89 +73,79 @@ class VideoSession():
             )
         ])
 
-    def start(self):
-        self._running = True
-        self._cap = cv2.VideoCapture(0)
+    def process_frame(self, image_bytes):
 
-        if not self._cap.isOpened():
-            print("[ERROR] Camera index 0 failed, trying index 1...")
-            self._cap = cv2.VideoCapture(1)
-            if not self._cap.isOpened():
-                raise RuntimeError("Could not open any camera. Check if another app is using it.")
+        nparr = np.frombuffer(image_bytes, np.uint8)
 
-        self._cap.set(3, 640)
-        self._cap.set(4, 480)
+        img = cv2.imdecode(
+            nparr,
+            cv2.IMREAD_COLOR
+        )
 
-        self._thread = threading.Thread(target=self._run)
-        self._thread.daemon = True
-        self._thread.start()
-    def get_frame(self):
-        if self._cap is None or not self._cap.isOpened():
-            return None
-        success, img = self._cap.read()
-        if not success:
-            return None
-        _, buffer = cv2.imencode('.jpg', img)
-        return buffer.tobytes()
-    
-    def _run(self):
-        buffer = deque(maxlen=10)
-        print("[VIDEO] Thread started")
+        if img is None:
+            return {"error": "Invalid image"}
 
-        while self._running:
-            success, img = self._cap.read()
-            if not success:
-                print("[ERROR] Camera read failed")
-                break
+        h, w, _ = img.shape
 
-            img = cv2.resize(img, (640, 480))
-            h, w, _ = img.shape
+        self.face_detector.setInputSize((w, h))
 
-            self.face_detector.setInputSize((w, h))
-            _, faces = self.face_detector.detect(img)
+        _, faces = self.face_detector.detect(img)
 
-            if faces is not None:
-                for face_data in faces:
-                    x, y, fw, fh = map(int, face_data[:4])
+        if faces is None:
+            return {"emotion": None}
 
-                    pad = 20
-                    x1 = max(0, x - pad)
-                    y1 = max(0, y - pad)
-                    x2 = min(w, x + fw + pad)
-                    y2 = min(h, y + fh + pad)
+        face_data = faces[0]
 
-                    face = img[y1:y2, x1:x2]
-                    if face.size == 0 or face.shape[0] == 0 or face.shape[1] == 0:
-                        continue
+        x, y, fw, fh = map(int, face_data[:4])
 
-                    face_resized = cv2.resize(face, (224, 224))
-                    face_rgb = cv2.cvtColor(face_resized, cv2.COLOR_BGR2RGB)
-                    face_pil = Image.fromarray(face_rgb)
-                    face_tensor = self.transform(face_pil).unsqueeze(0).to(self._device) 
+        pad = 20
 
-                    if face_tensor.shape != (1, 3, 224, 224):
-                        print("Bad tensor shape:", face_tensor.shape)
-                        continue
+        x1 = max(0, x - pad)
+        y1 = max(0, y - pad)
 
-                    with torch.no_grad():
-                        output = self._model(face_tensor)
+        x2 = min(w, x + fw + pad)
+        y2 = min(h, y + fh + pad)
 
-                    probs = torch.softmax(output, dim=1)
-                    confidence, pred = torch.max(probs, dim=1)
+        face = img[y1:y2, x1:x2]
 
-                    emotion = class_names[pred.item()]
-                    self._emotion_log.append(emotion.lower())
+        if face.size == 0:
+            return {"emotion": None}
 
-                    cv2.rectangle(img, (x1, y1), (x2, y2), (0, 255, 0), 2)
-                    cv2.putText(img, emotion, (x1, y1 - 10),
-                                cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
-            else:
-                print("[VIDEO] No face detected in frame")
+        face_resized = cv2.resize(face, (224, 224))
 
-    def stop(self):
-        self._running = False
-        if self._thread and self._thread.is_alive():
-            self._thread.join(timeout=2)
-        if self._cap:
-            self._cap.release()
-        return self._emotion_log
+        face_rgb = cv2.cvtColor(
+            face_resized,
+            cv2.COLOR_BGR2RGB
+        )
+
+        face_pil = Image.fromarray(face_rgb)
+
+        face_tensor = (
+            self.transform(face_pil)
+            .unsqueeze(0)
+            .to(self.device)
+        )
+
+        with torch.no_grad():
+            output = self.model(face_tensor)
+
+        probs = torch.softmax(output, dim=1)
+
+        confidence, pred = torch.max(
+            probs,
+            dim=1
+        )
+
+        emotion = class_names[pred.item()]
+
+        self.emotion_log.append(
+            emotion.lower()
+        )
+
+        return {
+            "emotion": emotion,
+            "confidence": float(confidence.item())
+        }
+
+    def reset(self):
+        self.emotion_log = []

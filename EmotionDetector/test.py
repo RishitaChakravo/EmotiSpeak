@@ -3,7 +3,9 @@ import sounddevice as sd
 import numpy as np
 import scipy.io.wavfile as wav
 import re
+import os
 import time
+import tempfile
 
 SAMPLE_RATE = 16000  
 CHANNELS = 1
@@ -28,9 +30,12 @@ def record_audio(duration: float) -> np.ndarray:
     return audio
 
 def transcribe_audio(audio: np.ndarray) -> str:
-    import os
 
-    tmp_path = "C:/Users/RISHITA CHAKRAVORTY/OneDrive/Desktop/App/temp_audio.wav"
+    with tempfile.NamedTemporaryFile(
+        suffix=".wav",
+        delete=False
+    ) as tmp:
+        tmp_path = tmp.name
     
     try:
         audio = audio.flatten()
