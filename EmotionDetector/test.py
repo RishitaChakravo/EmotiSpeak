@@ -1,11 +1,5 @@
 import whisper
-import sounddevice as sd
-import numpy as np
-import scipy.io.wavfile as wav
 import re
-import os
-import time
-import tempfile
 
 SAMPLE_RATE = 16000  
 CHANNELS = 1
@@ -19,15 +13,6 @@ FILLERS = [
 
 model = whisper.load_model("small") 
 
-def record_audio(duration: float) -> np.ndarray:
-    audio = sd.rec(
-        int(duration * SAMPLE_RATE),
-        samplerate=SAMPLE_RATE,
-        channels=CHANNELS,
-        dtype="float32",
-    )
-    sd.wait()
-    return audio
 
 def transcribe_audio(audio_path: str) -> str:
 

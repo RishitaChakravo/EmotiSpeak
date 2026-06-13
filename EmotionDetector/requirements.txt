@@ -17,5 +17,4 @@ lap
 fastapi
 uvicorn
 openai-whisper
-sounddevice
 python-multipart

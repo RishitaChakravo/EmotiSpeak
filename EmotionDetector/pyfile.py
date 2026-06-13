@@ -4,7 +4,6 @@ import torch
 from PIL import Image
 from collections import deque
 from collections import Counter
-import threading
 import numpy as np
 class_names = [
     "Surprise", "Fear", "Disgust",
