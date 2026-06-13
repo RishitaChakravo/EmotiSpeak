@@ -32,23 +32,18 @@ export default function Home() {
 
   const startcamera = async () => {
     try {
-      console.log("Entered Start func")
       setResults(null);
       const res = await axios.post("http://localhost:8000/api/audioops/start")
-      console.log("2. Backend started");
+      
       const stream = await navigator.mediaDevices.getUserMedia({
         video: true,
         audio: false
       });
-      console.log("3. Got stream", stream);
       streamRef.current = stream;
-      console.log("4. videoRef =", videoRef.current);
+      
       if (videoRef.current) {
-        console.log("5. Entered if block");
         videoRef.current.srcObject = stream;
-        console.log("6. srcObject assigned");
         videoRef.current.onloadedmetadata = () => {
-          console.log("7. Metadata loaded");
           setStarted(true);
         };
       }
@@ -58,8 +53,6 @@ export default function Home() {
   }
 
   const captureImage = async () => {
-    console.log("captureImage called");
-
     const video = videoRef.current;
     const canvas = canvasRef.current;
     if (!video || !canvas) return;
@@ -87,7 +80,6 @@ export default function Home() {
   }
 
   useEffect(() => {
-    console.log("started=", started);
     if (!started) return;
 
     const interval = setInterval(() => {
@@ -98,7 +90,6 @@ export default function Home() {
   }, [started]);
 
   const stopCamera = async () => {
-    console.log("Entered Stop func");
     setLoading(true);
     setStarted(false);
     streamRef.current?.getTracks().forEach((track) => track.stop());
@@ -108,7 +99,6 @@ export default function Home() {
     }
 
     try {
-      console.log("Stopped")
       const res = await axios.post("http://localhost:8000/api/audioops/stop");
       setResults(res.data);
     } catch (err) {
