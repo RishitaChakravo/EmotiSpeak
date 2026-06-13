@@ -3,50 +3,71 @@
 import axios from "axios";
 import { useState } from "react";
 import { useRef, useEffect } from "react";
+type Audio = {
+  transcript?: String,
+  word_count?: number,
+  wpm?: number,
+  fillers?: [string],
+  filler_ratio?: number,
+  filler_percentage?: number
+}
 
-type Results = {
-  audio?: {
-    transcript?: String,
-    word_count?: number,
-    wpm?: number,
-    fillers?: [string],
-    filler_ratio?: number,
-    filler_percentage?: number
-  }
-  video?: {
-    dominant_emotion?: [string, number][];
-    positive_ratio?: number;
-    negative_ratio?: number;
-    neutral_ratio?: number;
-    confidence_level?: string;
-  };
+type Video = {
+  dominant_emotion?: [string, number][];
+  positive_ratio?: number;
+  negative_ratio?: number;
+  neutral_ratio?: number;
+  confidence_level?: string;
 };
 
 export default function Home() {
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const audioChunksRef = useRef<Blob[]>([]);
+  const startTimeRef = useRef<number | null>(null);
   const [started, setStarted] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [results, setResults] = useState<Results | null>(null);
+  const [video, setVideo] = useState<Video | null>(null);
+  const [audio, setAudio] = useState<Audio | null>(null);
 
   const startcamera = async () => {
     try {
-      setResults(null);
+      setVideo(null);
+      setAudio(null);
+
       const res = await axios.post("http://localhost:8000/api/audioops/start")
-      
+
       const stream = await navigator.mediaDevices.getUserMedia({
         video: true,
         audio: false
       });
+
+      const audioStream = await navigator.mediaDevices.getUserMedia({
+        audio: true
+      })
+
+      audioChunksRef.current = [];
+
+      const recorder = new MediaRecorder(audioStream);
+      recorder.ondataavailable = (event) => {
+        audioChunksRef.current.push(event.data);
+      };
+
+      recorder.start();
+
+      mediaRecorderRef.current = recorder;
       streamRef.current = stream;
-      
+
       if (videoRef.current) {
         videoRef.current.srcObject = stream;
         videoRef.current.onloadedmetadata = () => {
           setStarted(true);
         };
       }
+      startTimeRef.current = Date.now();
+
     } catch (err) {
       console.error(err);
     }
@@ -93,22 +114,45 @@ export default function Home() {
     setLoading(true);
     setStarted(false);
     streamRef.current?.getTracks().forEach((track) => track.stop());
+    await new Promise<void>((resolve) => {
+      if (!mediaRecorderRef.current) {
+        resolve();
+        return;
+      }
+
+      mediaRecorderRef.current.onstop = () => resolve();
+
+      mediaRecorderRef.current.stop();
+    });
 
     if (videoRef.current) {
       videoRef.current.srcObject = null;
     }
+    mediaRecorderRef.current?.stream
+    .getTracks()
+    .forEach(track => track.stop());
+
+    const audioBlob = new Blob(audioChunksRef.current, { type: "audio/webm" });
+    const duration = (Date.now() - startTimeRef.current!) / 1000;
+
+    const formData = new FormData();
+
+    formData.append("audio", audioBlob, "recording.webm");
+    formData.append("duration", duration.toString())
 
     try {
-      const res = await axios.post("http://localhost:8000/api/audioops/stop");
-      setResults(res.data);
+      const res1 = await axios.post("http://localhost:8000/api/audioops/stop");
+      const res2 = await axios.post("http://localhost:8000/api/audio/upload", formData);
+      setAudio(res2.data);
+      setVideo(res1.data.video);
     } catch (err) {
       console.error(err);
     }
     setLoading(false);
   }
 
-  const vid = results?.video;
-  const aud = results?.audio;
+  const vid = video;
+  const aud = audio;
 
   return (
     <div className="min-h-screen bg-zinc-950 flex items-center justify-center p-6">
@@ -172,7 +216,7 @@ export default function Home() {
             Analysis results
           </div>
 
-          {!results ? (
+          {!audio && !video ? (
             <div className="flex-1 flex items-center justify-center text-zinc-600 text-sm p-6 text-center">
               {loading
                 ? "Analyzing your session..."

@@ -1,11 +1,12 @@
-from fastapi import FastAPI, UploadFile, File
+from fastapi import FastAPI, UploadFile, File, Form
 import uvicorn
-from test import RecordingSession, transcribe_audio, analyze_speech
+from test import transcribe_audio, analyze_speech
 from fastapi.middleware.cors import CORSMiddleware
 from model import model
 import torch
 from pyfile import VideoService, analyze_emotions
 from fastapi.responses import StreamingResponse
+import tempfile, os
 
 app = FastAPI()
 
@@ -21,13 +22,10 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 model.to(device)
 model.eval()
 
-session = RecordingSession()
 vidService = VideoService(model=model)
 
 @app.post("/api/audioops/start")
 def start():
-
-    session.start()
 
     vidService.reset()
     return {
@@ -45,20 +43,33 @@ async def process_frame(
         image_bytes
     )
 
+@app.post("/api/audio/upload")
+async def getAudio(audio: UploadFile = File(...), duration: float = Form(...)):
+    with tempfile.NamedTemporaryFile(suffix=".webm", delete=False) as tmp:
+        content = await audio.read()
+        tmp.write(content)
+
+        tmp_path = tmp.name
+    
+    try:
+        text = transcribe_audio(tmp_path)
+
+        aud_data = analyze_speech(
+            text, duration
+        )
+
+        return aud_data
+    finally:
+        os.remove(tmp_path)
+
 @app.post("/api/audioops/stop")
 def stop():
     try:
-        audio, duration = session.stop()
-        text = transcribe_audio(audio)
         vid_data = analyze_emotions(
             vidService.emotion_log
         )
-        aud_data = analyze_speech(
-            text,
-            duration
-        )
+
         return {
-            "audio": aud_data,
             "video": vid_data,
             "loading": False
         }
