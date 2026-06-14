@@ -143,7 +143,7 @@ export default function Home() {
 
     try {
       const res1 = await axios.post(`${API}/api/audioops/stop`);
-      const res2 = await axios.post(`${API}/api/audio/upload"`, formData);
+      const res2 = await axios.post(`${API}/api/audio/upload`, formData);
       setAudio(res2.data);
       setVideo(res1.data.video);
     } catch (err) {
