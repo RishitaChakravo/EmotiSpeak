@@ -1,8 +1,6 @@
 torch
 matplotlib
 numpy
-ultralytics
-cvzone
 hydra-core
 opencv-python-headless==4.10.0.84
 Pillow
