@@ -106,7 +106,7 @@ export default function Home() {
 
     const interval = setInterval(() => {
       captureImage();
-    }, 1000)
+    }, 2500)
 
     return () => clearInterval(interval);
   }, [started]);

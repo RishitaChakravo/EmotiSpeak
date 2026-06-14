@@ -37,11 +37,21 @@ def start():
 async def process_frame(
     file: UploadFile = File(...)
 ):
-    image_bytes = await file.read()
-
-    return vidService.process_frame(
-        image_bytes
-    )
+    try:
+        image_bytes = await file.read()
+        
+        with torch.no_grad():
+            with torch.amp.autocast(device_type=device.type):
+                response = vidService.process_frame(image_bytes)
+                
+        return response
+        
+    except Exception as e:
+        print("VIDEO FRAME PROCESSING CRASH ERROR:", e)
+        return {
+            "error": "Failed to process video frame",
+            "details": str(e)
+        }
 
 @app.post("/api/audio/upload")
 async def getAudio(audio: UploadFile = File(...), duration: float = Form(...)):
